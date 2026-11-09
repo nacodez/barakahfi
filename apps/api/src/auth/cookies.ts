@@ -1,7 +1,6 @@
 import type { Response } from 'express';
 import {
   ACCESS_COOKIE,
-  ACCESS_TTL_SECONDS,
   REFRESH_COOKIE,
   REFRESH_COOKIE_PATH,
   REFRESH_TTL_SECONDS,
@@ -14,10 +13,13 @@ export function setAuthCookies(
   tokens: { accessToken: string; refreshToken: string },
   secure: boolean,
 ): void {
+  // The cookie outlives the 15-minute JWT on purpose: the web proxy only checks that a
+  // session exists (for redirects), and the client refreshes silently when the JWT expires.
+  // Expiry itself is always enforced server-side.
   res.cookie(ACCESS_COOKIE, tokens.accessToken, {
     ...base(secure),
     path: '/',
-    maxAge: ACCESS_TTL_SECONDS * 1000,
+    maxAge: REFRESH_TTL_SECONDS * 1000,
   });
   res.cookie(REFRESH_COOKIE, tokens.refreshToken, {
     ...base(secure),

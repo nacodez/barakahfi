@@ -11,6 +11,8 @@ export const envSchema = z.object({
   WEB_ORIGIN: z.url(),
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),
+  /** Concurrent refreshes (e.g. two tabs) within this window aren't treated as token theft. */
+  REFRESH_REUSE_LEEWAY_SECONDS: z.coerce.number().int().min(0).default(10),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   ALPHA_VANTAGE_API_KEY: z.string().optional(),

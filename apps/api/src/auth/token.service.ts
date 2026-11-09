@@ -73,11 +73,24 @@ export class TokenService {
       return this.createRefresh(tx, row.userId, row.familyId, userAgent);
     });
 
-    if (!issued) {
-      await this.revokeFamily(row.familyId);
-      throw new UnauthorizedException('Invalid refresh token');
+    if (issued) return { ...issued, userId: row.userId };
+
+    // Lost the claim. Two tabs refreshing at the same instant is normal, so a reuse
+    // inside the leeway window just gets a fresh token. Reuse long after is theft.
+    const current = await this.prisma.refreshToken.findUnique({ where: { id: row.id } });
+    const leewayMs = this.config.get('REFRESH_REUSE_LEEWAY_SECONDS', { infer: true }) * 1000;
+    if (
+      current &&
+      !current.revokedAt &&
+      current.usedAt &&
+      Date.now() - current.usedAt.getTime() < leewayMs
+    ) {
+      const next = await this.createRefresh(this.prisma, row.userId, row.familyId, userAgent);
+      return { ...next, userId: row.userId };
     }
-    return { ...issued, userId: row.userId };
+
+    await this.revokeFamily(row.familyId);
+    throw new UnauthorizedException('Invalid refresh token');
   }
 
   async revokeFamilyByToken(rawToken: string): Promise<void> {

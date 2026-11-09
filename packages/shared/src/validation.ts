@@ -35,9 +35,9 @@ export const loginSchema = z.object({
 export type LoginInput = z.infer<typeof loginSchema>;
 
 export const createAccountSchema = z.object({
-  name: z.string().trim().min(1).max(LIMITS.ACCOUNT_NAME_MAX),
+  name: z.string().trim().min(1, 'Account name is required').max(LIMITS.ACCOUNT_NAME_MAX),
   type: z.enum(AccountType),
-  currency: z.string().regex(CURRENCY_REGEX, 'ISO 4217 code, e.g. AED'),
+  currency: z.string().regex(CURRENCY_REGEX, 'Use a 3-letter code in capitals, e.g. AED'),
   /** Money crosses the wire as a decimal string, never a float. */
   balance: z.string().regex(/^-?\d{1,13}(\.\d{1,2})?$/, 'Up to 2 decimal places'),
   isZakatable: z.boolean().default(true),

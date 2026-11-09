@@ -4,6 +4,7 @@ import { TokenService } from './token.service';
 const SECRETS: Record<string, string> = {
   JWT_ACCESS_SECRET: 'a'.repeat(32),
   JWT_REFRESH_SECRET: 'b'.repeat(32),
+  REFRESH_REUSE_LEEWAY_SECONDS: 10 as unknown as string,
 };
 
 function setup() {
@@ -44,9 +45,11 @@ describe('TokenService.rotate', () => {
     });
   });
 
-  it('revokes the whole family when a used token is replayed', async () => {
+  it('revokes the whole family when a used token is replayed after the leeway window', async () => {
     const { service, refreshToken } = setup();
-    refreshToken.findUnique.mockResolvedValue(row());
+    refreshToken.findUnique
+      .mockResolvedValueOnce(row())
+      .mockResolvedValueOnce({ ...row(), usedAt: new Date(Date.now() - 60_000), revokedAt: null });
     refreshToken.updateMany.mockResolvedValueOnce({ count: 0 }).mockResolvedValueOnce({ count: 3 });
 
     await expect(service.rotate('stolen')).rejects.toBeInstanceOf(UnauthorizedException);
@@ -56,6 +59,20 @@ describe('TokenService.rotate', () => {
       where: { familyId: 'family-1', revokedAt: null },
       data: { revokedAt: expect.any(Date) },
     });
+  });
+
+  it('issues a fresh token instead of revoking when two requests race within the leeway', async () => {
+    const { service, refreshToken } = setup();
+    refreshToken.findUnique
+      .mockResolvedValueOnce(row())
+      .mockResolvedValueOnce({ ...row(), usedAt: new Date(Date.now() - 1_000), revokedAt: null });
+    refreshToken.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    const result = await service.rotate('raced');
+
+    expect(result.userId).toBe('user-1');
+    expect(refreshToken.create).toHaveBeenCalledTimes(1);
+    expect(refreshToken.updateMany).toHaveBeenCalledTimes(1); // only the failed claim, no revoke
   });
 
   it('rejects unknown tokens', async () => {
