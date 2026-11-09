@@ -40,4 +40,5 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm --filter @barakahfi/api exec prisma migrate deploy
       - run: pnpm test
+      - run: pnpm --filter @barakahfi/api test:e2e
       - run: pnpm build

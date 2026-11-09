@@ -10,6 +10,7 @@ allowBuilds:
   '@nestjs/core': true
   '@swc/core': true
   esbuild: true
+  argon2: true
 
 minimumReleaseAgeExclude:
   - '@nestjs/common@12.4.1'
