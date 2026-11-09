@@ -9,5 +9,7 @@ export function toUserDto(u: User): UserDto {
     currency: u.currency,
     role: u.role,
     emailVerified: u.emailVerifiedAt !== null,
+    nisabMethod: u.nisabMethod,
+    zakatStartDate: u.zakatStartDate ? u.zakatStartDate.toISOString().slice(0, 10) : null,
   };
 }

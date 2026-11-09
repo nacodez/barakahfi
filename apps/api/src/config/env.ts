@@ -12,6 +12,13 @@ export const envSchema = z.object({
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),
   /** Concurrent refreshes (e.g. two tabs) within this window aren't treated as token theft. */
+  /** Seconds between live price refreshes while someone is connected (markets permitting). */
+  PRICE_TICK_SECONDS: z.coerce.number().int().min(5).default(30),
+  /** Set to "false" to turn the background ticker off (tests do). */
+  PRICE_TICKER_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
   REFRESH_REUSE_LEEWAY_SECONDS: z.coerce.number().int().min(0).default(10),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),

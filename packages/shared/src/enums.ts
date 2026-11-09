@@ -22,3 +22,21 @@ export type HalalStatus = (typeof HalalStatus)[keyof typeof HalalStatus];
 
 export const Role = { USER: 'USER', ADMIN: 'ADMIN' } as const;
 export type Role = (typeof Role)[keyof typeof Role];
+
+export const TransactionType = {
+  INCOME: 'INCOME',
+  EXPENSE: 'EXPENSE',
+  TRANSFER: 'TRANSFER',
+} as const;
+export type TransactionType = (typeof TransactionType)[keyof typeof TransactionType];
+
+export const BudgetPeriod = {
+  MONTHLY: 'MONTHLY',
+  QUARTERLY: 'QUARTERLY',
+  YEARLY: 'YEARLY',
+} as const;
+export type BudgetPeriod = (typeof BudgetPeriod)[keyof typeof BudgetPeriod];
+
+/** Budget health. Thresholds live in budget-status.ts. */
+export const BudgetStatus = { ON_TRACK: 'ON_TRACK', WARNING: 'WARNING', OVER: 'OVER' } as const;
+export type BudgetStatus = (typeof BudgetStatus)[keyof typeof BudgetStatus];

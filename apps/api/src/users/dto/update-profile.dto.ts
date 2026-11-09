@@ -1,4 +1,4 @@
-import { CURRENCY_REGEX, LIMITS } from '@barakahfi/shared';
+import { CURRENCY_REGEX, DATE_ONLY_REGEX, LIMITS } from '@barakahfi/shared';
 import { Transform } from 'class-transformer';
 import { IsIn, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 
@@ -17,4 +17,9 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsIn(['GOLD', 'SILVER'])
   nisabMethod?: 'GOLD' | 'SILVER';
+
+  /** Start of the zakat year (hawl). Send null to clear it. */
+  @IsOptional()
+  @Matches(DATE_ONLY_REGEX, { message: 'zakatStartDate must be YYYY-MM-DD' })
+  zakatStartDate?: string | null;
 }

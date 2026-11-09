@@ -23,4 +23,16 @@ export function proxy(request: NextRequest) {
   return NextResponse.next();
 }
 
-export const config = { matcher: ['/dashboard/:path*', '/login', '/register'] };
+/** Must be a literal: Next.js reads `matcher` at compile time and rejects computed values. */
+export const config = {
+  matcher: [
+    '/dashboard/:path*',
+    '/transactions/:path*',
+    '/budgets/:path*',
+    '/portfolio/:path*',
+    '/screener/:path*',
+    '/zakat/:path*',
+    '/login',
+    '/register',
+  ],
+};

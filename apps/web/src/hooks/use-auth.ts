@@ -40,3 +40,19 @@ export function useLogout() {
     onSettled: () => qc.clear(),
   });
 }
+
+export function useUpdateProfile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      zakatStartDate?: string | null;
+      nisabMethod?: 'GOLD' | 'SILVER';
+      currency?: string;
+      name?: string;
+    }) => api<UserDto>('/users/me', { method: 'PATCH', body: input }),
+    onSuccess: (user) => {
+      qc.setQueryData(meKey, user);
+      return qc.invalidateQueries({ queryKey: ['zakat'] });
+    },
+  });
+}

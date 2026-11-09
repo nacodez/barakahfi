@@ -1,4 +1,5 @@
 import { Body, Controller, Get, HttpCode, Post, Req, Res } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { Throttle } from '@nestjs/throttler';
 import type { UserDto } from '@barakahfi/shared';
@@ -16,6 +17,7 @@ import { LoginDto, RegisterDto } from './dto/auth.dto';
 const readRefreshCookie = (req: Request) =>
   (req.cookies as Record<string, string | undefined> | undefined)?.[REFRESH_COOKIE];
 
+@ApiTags('auth')
 @Controller('auth')
 export class AuthController {
   private readonly secure: boolean;

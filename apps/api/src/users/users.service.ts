@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import type { UserDto } from '@barakahfi/shared';
+import { parseDateOnly } from '../common/date.util';
 import { PrismaService } from '../prisma/prisma.service';
 import type { UpdateProfileDto } from './dto/update-profile.dto';
 import { toUserDto } from './users.mapper';
@@ -16,7 +17,16 @@ export class UsersService {
 
   async updateProfile(userId: string, dto: UpdateProfileDto): Promise<UserDto> {
     await this.getProfile(userId);
-    const user = await this.prisma.user.update({ where: { id: userId }, data: dto });
+    const { zakatStartDate, ...rest } = dto;
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...rest,
+        ...(zakatStartDate !== undefined && {
+          zakatStartDate: zakatStartDate === null ? null : parseDateOnly(zakatStartDate),
+        }),
+      },
+    });
     return toUserDto(user);
   }
 }

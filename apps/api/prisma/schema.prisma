@@ -1,5 +1,5 @@
-// Phase 1 schema: Users, auth tokens, Accounts, Categories.
-// Phase 2 adds Transactions/Budgets; Phase 3 adds Assets/Holdings/Screening/Zakat.
+// Phase 1: Users, auth tokens, Accounts, Categories. Phase 2: Transactions, Budgets.
+// Phase 3: Assets, Screening results, Holdings, Zakat records.
 
 generator client {
   provider     = "prisma-client"
@@ -37,31 +37,62 @@ enum HalalStatus {
   NEUTRAL
 }
 
+enum TransactionType {
+  INCOME
+  EXPENSE
+  TRANSFER
+}
+
+enum BudgetPeriod {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum AssetType {
+  STOCK
+  ETF
+  SUKUK
+  GOLD
+  REAL_ESTATE
+  CRYPTO
+}
+
+enum ComplianceStatus {
+  COMPLIANT
+  NON_COMPLIANT
+  DOUBTFUL
+}
+
 enum NisabMethod {
   GOLD
   SILVER
 }
 
 model User {
-  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email          String      @unique @db.VarChar(255)
+  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email           String      @unique @db.VarChar(255)
   /// Null for Google-only users.
-  passwordHash   String?     @map("password_hash") @db.VarChar(255)
-  googleId       String?     @unique @map("google_id") @db.VarChar(255)
-  name           String      @db.VarChar(100)
-  role           Role        @default(USER)
-  currency       String      @default("AED") @db.VarChar(3)
-  nisabMethod    NisabMethod @default(GOLD) @map("nisab_method")
+  passwordHash    String?     @map("password_hash") @db.VarChar(255)
+  googleId        String?     @unique @map("google_id") @db.VarChar(255)
+  name            String      @db.VarChar(100)
+  role            Role        @default(USER)
+  currency        String      @default("AED") @db.VarChar(3)
+  nisabMethod     NisabMethod @default(GOLD) @map("nisab_method")
   /// Start of the user's hawl (zakat year).
-  zakatStartDate DateTime?   @map("zakat_start_date") @db.Date
-  emailVerifiedAt DateTime?  @map("email_verified_at") @db.Timestamptz
-  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt      DateTime    @updatedAt @map("updated_at") @db.Timestamptz
+  zakatStartDate  DateTime?   @map("zakat_start_date") @db.Date
+  emailVerifiedAt DateTime?   @map("email_verified_at") @db.Timestamptz
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz
 
   accounts      Account[]
   categories    Category[]
   refreshTokens RefreshToken[]
   authTokens    AuthToken[]
+  transactions  Transaction[]
+  budgets       Budget[]
+  holdings      Holding[]
+  zakatRecords  ZakatRecord[]
 
   @@map("users")
 }
@@ -69,15 +100,15 @@ model User {
 /// Rotating refresh tokens. Only a SHA-256 hash is stored. All tokens in a
 /// `familyId` are revoked if a used token is replayed (theft detection).
 model RefreshToken {
-  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId     String    @map("user_id") @db.Uuid
-  familyId   String    @map("family_id") @db.Uuid
-  tokenHash  String    @unique @map("token_hash") @db.VarChar(64)
-  expiresAt  DateTime  @map("expires_at") @db.Timestamptz
-  usedAt     DateTime? @map("used_at") @db.Timestamptz
-  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz
-  userAgent  String?   @map("user_agent") @db.VarChar(255)
-  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  familyId  String    @map("family_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash") @db.VarChar(64)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  usedAt    DateTime? @map("used_at") @db.Timestamptz
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz
+  userAgent String?   @map("user_agent") @db.VarChar(255)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -121,7 +152,10 @@ model Account {
   createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz
   updatedAt   DateTime    @updatedAt @map("updated_at") @db.Timestamptz
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions      Transaction[] @relation("TransactionAccount")
+  incomingTransfers Transaction[] @relation("TransactionTransferAccount")
+  holdings          Holding[]
 
   @@index([userId, archivedAt])
   @@map("accounts")
@@ -137,9 +171,159 @@ model Category {
   halalStatus HalalStatus  @default(NEUTRAL) @map("halal_status")
   createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz
 
-  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  budgets      Budget[]
 
   @@unique([userId, name, type])
   @@index([userId])
   @@map("categories")
+}
+
+/// One ledger entry. `amount` is always positive; `type` decides the direction.
+/// Account balances change only together with a row here (same DB transaction).
+model Transaction {
+  id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// Denormalised from the account so listing and budget queries need no join.
+  userId            String          @map("user_id") @db.Uuid
+  accountId         String          @map("account_id") @db.Uuid
+  /// Destination account of a TRANSFER; null for income and expenses.
+  transferAccountId String?         @map("transfer_account_id") @db.Uuid
+  categoryId        String?         @map("category_id") @db.Uuid
+  type              TransactionType
+  amount            Decimal         @db.Decimal(15, 2)
+  description       String          @default("") @db.VarChar(255)
+  date              DateTime        @db.Date
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // NoAction (not Restrict) so deleting a user can cascade through accounts and transactions in one statement.
+  account         Account   @relation("TransactionAccount", fields: [accountId], references: [id], onDelete: NoAction)
+  transferAccount Account?  @relation("TransactionTransferAccount", fields: [transferAccountId], references: [id], onDelete: NoAction)
+  category        Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([accountId, date])
+  @@index([userId, date(sort: Desc), id(sort: Desc)])
+  @@index([userId, categoryId, date])
+  @@map("transactions")
+}
+
+model Budget {
+  id         String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String       @map("user_id") @db.Uuid
+  categoryId String       @map("category_id") @db.Uuid
+  /// Limit per period, in the user's default currency.
+  amount     Decimal      @db.Decimal(15, 2)
+  period     BudgetPeriod
+  /// Budget applies from this date onwards.
+  startDate  DateTime     @map("start_date") @db.Date
+  createdAt  DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  /// One budget per category per period type.
+  @@unique([userId, categoryId, period])
+  @@index([userId])
+  @@map("budgets")
+}
+
+/// A tradable instrument. Prices are refreshed by the price ticker; `previousClose` drives "day change".
+model Asset {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// Provider symbol, e.g. "AAPL" or "EMAAR.AE".
+  symbol        String    @unique @db.VarChar(20)
+  name          String    @db.VarChar(200)
+  type          AssetType
+  exchange      String?   @db.VarChar(20)
+  sector        String?   @db.VarChar(60)
+  /// In US dollars. Approximate (price x shares outstanding at seed time).
+  marketCap     Decimal?  @map("market_cap") @db.Decimal(20, 0)
+  currentPrice  Decimal   @map("current_price") @db.Decimal(15, 4)
+  previousClose Decimal?  @map("previous_close") @db.Decimal(15, 4)
+  currency      String    @db.VarChar(3)
+  lastUpdated   DateTime  @default(now()) @map("last_updated") @db.Timestamptz
+
+  screenings ScreeningResult[]
+  holdings   Holding[]
+
+  @@index([exchange])
+  @@index([sector])
+  @@map("assets")
+}
+
+/// One screening verdict plus the inputs it was based on. Rows are kept as history:
+/// a new row is written only when the verdict or the numbers change.
+model ScreeningResult {
+  id                  String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  assetId             String           @map("asset_id") @db.Uuid
+  complianceStatus    ComplianceStatus @map("compliance_status")
+  /// Interest-bearing debt / market cap, as a fraction (0.2345 = 23.45%).
+  debtRatio           Decimal          @map("debt_ratio") @db.Decimal(6, 4)
+  /// (Cash + interest-bearing securities) / market cap.
+  cashRatio           Decimal          @map("cash_ratio") @db.Decimal(6, 4)
+  /// (Receivables + cash) / market cap. Null when the data source doesn't provide it.
+  receivablesRatio    Decimal?         @map("receivables_ratio") @db.Decimal(6, 4)
+  /// { haramRevenueRatio: "0.0300", sources: string[], primaryActivity: "PERMISSIBLE" | "PROHIBITED", prohibitedReason?: string }
+  revenueScreening    Json             @map("revenue_screening")
+  /// Fraction of dividends to donate. Zero for non-compliant stocks (the advice there is to divest).
+  purificationPercent Decimal          @map("purification_percent") @db.Decimal(6, 4)
+  screenedAt          DateTime         @default(now()) @map("screened_at") @db.Timestamptz
+  /// "demo-seed", "manual", or a provider id such as "musaffa".
+  source              String           @db.VarChar(50)
+
+  asset Asset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@index([assetId, screenedAt(sort: Desc)])
+  @@map("screening_results")
+}
+
+/// A user's position in one asset (one row per user and asset; edit it to add shares).
+model Holding {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId            String   @map("user_id") @db.Uuid
+  assetId           String   @map("asset_id") @db.Uuid
+  /// Optional: which investment account holds it.
+  accountId         String?  @map("account_id") @db.Uuid
+  quantity          Decimal  @db.Decimal(15, 6)
+  /// Cost basis per unit, in the asset's currency.
+  avgBuyPrice       Decimal  @map("avg_buy_price") @db.Decimal(15, 4)
+  purchaseDate      DateTime @map("purchase_date") @db.Date
+  /// Dividends received so far, in the asset's currency; used to work out what to purify.
+  dividendsReceived Decimal  @default(0) @map("dividends_received") @db.Decimal(15, 2)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset   Asset    @relation(fields: [assetId], references: [id], onDelete: NoAction)
+  account Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, assetId])
+  @@index([assetId])
+  @@map("holdings")
+}
+
+/// A saved zakat calculation for one Hijri year.
+model ZakatRecord {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String      @map("user_id") @db.Uuid
+  hijriYear    Int         @map("hijri_year")
+  currency     String      @db.VarChar(3)
+  nisabMethod  NisabMethod @map("nisab_method")
+  /// Zakatable wealth after deducting liabilities.
+  totalAssets  Decimal     @map("total_assets") @db.Decimal(15, 2)
+  nisabValue   Decimal     @map("nisab_value") @db.Decimal(15, 2)
+  /// 2.5% of the wealth if it reaches the nisab, otherwise 0.
+  zakatDue     Decimal     @map("zakat_due") @db.Decimal(15, 2)
+  zakatPaid    Decimal     @default(0) @map("zakat_paid") @db.Decimal(15, 2)
+  /// The inputs and prices used, so a past calculation can always be explained.
+  breakdown    Json
+  notes        String?
+  calculatedAt DateTime    @default(now()) @map("calculated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, hijriYear])
+  @@map("zakat_records")
 }

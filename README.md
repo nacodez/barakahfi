@@ -4,6 +4,16 @@ Sharia-compliant personal finance platform: portfolio tracking, halal stock scre
 
 Turborepo · Next.js 16 · NestJS 12 · PostgreSQL 18 + Prisma 7 · TypeScript 6 (strict)
 
+## What it does
+
+- **Accounts, transactions, budgets and reports** with balances that stay exact (atomic updates).
+- **Portfolio** with live prices, gain/loss, allocation and the dividend **purification** owed per holding.
+- **Halal stock screener** applying the AAOIFI business and financial-ratio screens, with a plain-English breakdown of every check.
+- **Zakat calculator**: a four-step wizard using your own balances and today's gold and silver prices, with saved history and payment tracking.
+- Works on phones: responsive layouts, a bottom tab bar, and "Add to Home Screen" support.
+
+> **Sample data.** The screening ratios and verdicts shipped with the demo are illustrative placeholders, not real Sharia screening results (prices are real). They are labelled as such throughout the UI. A production deployment should replace the data source with a licensed provider such as Musaffa, Zoya or IdealRatings; the app only depends on the `FinancialDataProvider` interface for this.
+
 ## Layout
 
 ```
@@ -24,6 +34,8 @@ pnpm --filter @barakahfi/api db:seed         # system categories
 pnpm dev                                     # web :3000, api :4000
 curl localhost:4000/api/v1/health
 ```
+
+Interactive API docs: http://localhost:4000/api/docs
 
 ## Architecture decisions
 
