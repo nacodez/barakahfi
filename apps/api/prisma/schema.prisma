@@ -1,0 +1,145 @@
+// Phase 1 schema: Users, auth tokens, Accounts, Categories.
+// Phase 2 adds Transactions/Budgets; Phase 3 adds Assets/Holdings/Screening/Zakat.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum AccountType {
+  BANK
+  INVESTMENT
+  CASH
+  GOLD
+  REAL_ESTATE
+  CRYPTO
+}
+
+enum CategoryType {
+  INCOME
+  EXPENSE
+}
+
+enum HalalStatus {
+  HALAL
+  HARAM
+  DOUBTFUL
+  NEUTRAL
+}
+
+enum NisabMethod {
+  GOLD
+  SILVER
+}
+
+model User {
+  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email          String      @unique @db.VarChar(255)
+  /// Null for Google-only users.
+  passwordHash   String?     @map("password_hash") @db.VarChar(255)
+  googleId       String?     @unique @map("google_id") @db.VarChar(255)
+  name           String      @db.VarChar(100)
+  role           Role        @default(USER)
+  currency       String      @default("AED") @db.VarChar(3)
+  nisabMethod    NisabMethod @default(GOLD) @map("nisab_method")
+  /// Start of the user's hawl (zakat year).
+  zakatStartDate DateTime?   @map("zakat_start_date") @db.Date
+  emailVerifiedAt DateTime?  @map("email_verified_at") @db.Timestamptz
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime    @updatedAt @map("updated_at") @db.Timestamptz
+
+  accounts      Account[]
+  categories    Category[]
+  refreshTokens RefreshToken[]
+  authTokens    AuthToken[]
+
+  @@map("users")
+}
+
+/// Rotating refresh tokens. Only a SHA-256 hash is stored. All tokens in a
+/// `familyId` are revoked if a used token is replayed (theft detection).
+model RefreshToken {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  familyId   String    @map("family_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash") @db.VarChar(64)
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz
+  usedAt     DateTime? @map("used_at") @db.Timestamptz
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz
+  userAgent  String?   @map("user_agent") @db.VarChar(255)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("refresh_tokens")
+}
+
+enum AuthTokenPurpose {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
+/// Single-use tokens for email verification and password reset (hash only).
+model AuthToken {
+  id        String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  purpose   AuthTokenPurpose
+  tokenHash String           @unique @map("token_hash") @db.VarChar(64)
+  expiresAt DateTime         @map("expires_at") @db.Timestamptz
+  usedAt    DateTime?        @map("used_at") @db.Timestamptz
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@map("auth_tokens")
+}
+
+model Account {
+  id          String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String      @map("user_id") @db.Uuid
+  name        String      @db.VarChar(100)
+  type        AccountType
+  currency    String      @db.VarChar(3)
+  /// Denormalised; only ever changed inside a DB transaction with its ledger entry.
+  balance     Decimal     @default(0) @db.Decimal(15, 2)
+  isZakatable Boolean     @default(true) @map("is_zakatable")
+  /// Soft-delete: archived accounts keep history but disappear from pickers.
+  archivedAt  DateTime?   @map("archived_at") @db.Timestamptz
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime    @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, archivedAt])
+  @@map("accounts")
+}
+
+model Category {
+  id          String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// Null = system default category, visible to everyone.
+  userId      String?      @map("user_id") @db.Uuid
+  name        String       @db.VarChar(50)
+  type        CategoryType
+  icon        String       @db.VarChar(30)
+  halalStatus HalalStatus  @default(NEUTRAL) @map("halal_status")
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name, type])
+  @@index([userId])
+  @@map("categories")
+}

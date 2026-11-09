@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://barakahfi:barakahfi@localhost:5432/barakahfi_test
+      WEB_ORIGIN: http://localhost:3000
+      JWT_ACCESS_SECRET: ci-access-secret-ci-access-secret-0000
+      JWT_REFRESH_SECRET: ci-refresh-secret-ci-refresh-secret-000
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: barakahfi
+          POSTGRES_PASSWORD: barakahfi
+          POSTGRES_DB: barakahfi_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U barakahfi" --health-interval 5s --health-timeout 3s --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm --filter @barakahfi/api exec prisma migrate deploy
+      - run: pnpm test
+      - run: pnpm build

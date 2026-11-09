@@ -1,0 +1,18 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+allowBuilds:
+  sharp: true
+  unrs-resolver: true
+  '@prisma/engines': true
+  prisma: true
+  '@nestjs/core': true
+  '@swc/core': true
+  esbuild: true
+
+minimumReleaseAgeExclude:
+  - '@nestjs/common@12.4.1'
+  - '@nestjs/core@12.4.1'
+  - '@nestjs/platform-express@12.4.1'
+  - '@nestjs/testing@12.4.1'
