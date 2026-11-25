@@ -1,13 +1,19 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { Prisma } from '../generated/prisma/client';
+import { CacheService, LAST_KNOWN_TTL_SECONDS } from '../cache/cache.service';
 import { FxService } from './fx.service';
 import { PriceProvider } from './price-provider';
 
 const GRAMS_PER_TROY_OUNCE = new Prisma.Decimal('31.1034768');
-const TTL_MS = 10 * 60 * 1000;
+const TTL_MS = 10 * 60 * 1000; // how long a price counts as fresh
 const SYMBOL = { gold: 'GC=F', silver: 'SI=F' } as const;
 
 export type Metal = keyof typeof SYMBOL;
+
+interface CachedPrice {
+  usdPerOunce: string;
+  at: number;
+}
 
 export interface MetalPrice {
   /** Price of one gram in the requested currency. */
@@ -19,11 +25,10 @@ export interface MetalPrice {
 
 @Injectable()
 export class MetalsService {
-  private readonly cache = new Map<Metal, { usdPerOunce: Prisma.Decimal; at: number }>();
-
   constructor(
     private readonly prices: PriceProvider,
     private readonly fx: FxService,
+    private readonly cache: CacheService,
   ) {}
 
   async perGram(metal: Metal, currency: string): Promise<MetalPrice> {
@@ -37,16 +42,21 @@ export class MetalsService {
   }
 
   private async usdPerOunce(metal: Metal) {
-    const hit = this.cache.get(metal);
-    if (hit && Date.now() - hit.at < TTL_MS) return { ...hit, source: 'live' as const };
+    const key = `metal:${metal}`;
+    const hit = await this.cache.get<CachedPrice>(key);
+    if (hit && Date.now() - hit.at < TTL_MS) return this.result(hit, 'live');
 
     const quote = (await this.prices.quote([SYMBOL[metal]])).get(SYMBOL[metal]);
     if (quote) {
-      const fresh = { usdPerOunce: quote.price, at: Date.now() };
-      this.cache.set(metal, fresh);
-      return { ...fresh, source: 'live' as const };
+      const fresh = { usdPerOunce: quote.price.toString(), at: Date.now() };
+      await this.cache.set(key, fresh, LAST_KNOWN_TTL_SECONDS);
+      return this.result(fresh, 'live');
     }
-    if (hit) return { ...hit, source: 'cached' as const };
+    if (hit) return this.result(hit, 'cached');
     throw new ServiceUnavailableException(`The ${metal} price is unavailable right now`);
+  }
+
+  private result(entry: CachedPrice, source: 'live' | 'cached') {
+    return { usdPerOunce: new Prisma.Decimal(entry.usdPerOunce), at: entry.at, source };
   }
 }

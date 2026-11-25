@@ -5,6 +5,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AccountsModule } from './accounts/accounts.module';
 import { AuthModule } from './auth/auth.module';
 import { BudgetsModule } from './budgets/budgets.module';
+import { CacheModule } from './cache/cache.module';
 import { CategoriesModule } from './categories/categories.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
@@ -29,6 +30,7 @@ import { ZakatModule } from './zakat/zakat.module';
       skipIf: () => process.env.THROTTLE_DISABLED === 'true',
     }),
     PrismaModule,
+    CacheModule,
     AuthModule,
     UsersModule,
     AccountsModule,
