@@ -31,7 +31,7 @@ pnpm db:up                                   # Postgres :5434, Redis :6380
 cp apps/api/.env.example apps/api/.env       # already done locally
 pnpm --filter @barakahfi/api db:migrate      # create tables
 pnpm --filter @barakahfi/api db:seed         # system categories
-pnpm dev                                     # web :3000, api :4000
+pnpm dev                                     # web :3100, api :4000
 curl localhost:4000/api/v1/health
 ```
 

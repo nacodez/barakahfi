@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       DATABASE_URL: postgresql://barakahfi:barakahfi@localhost:5432/barakahfi_test
-      WEB_ORIGIN: http://localhost:3000
+      WEB_ORIGIN: http://localhost:3100
       JWT_ACCESS_SECRET: ci-access-secret-ci-access-secret-0000
       JWT_REFRESH_SECRET: ci-refresh-secret-ci-refresh-secret-000
     services:
